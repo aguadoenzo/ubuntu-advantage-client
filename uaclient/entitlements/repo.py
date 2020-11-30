@@ -188,6 +188,26 @@ class RepoEntitlement(base.UAEntitlement):
             "{} is not configured".format(self.title),
         )
 
+    def _check_apt_url_delta_should_be_applied(self, delta_apt_url):
+        """Check if apt url delta should be applied.
+
+        :param delta_apt_url: string containing the delta apt url
+            to be applied.
+
+        :return: True if apt url should be applied. False otherwise.
+        """
+        if not delta_apt_url:
+            return False
+
+        apt_file = self.repo_list_file_tmpl.format(name=self.name)
+
+        if os.path.exists(apt_file):
+            with open(apt_file, "r") as f:
+                if delta_apt_url in f.read():
+                    return False
+
+        return True
+
     def process_contract_deltas(
         self,
         orig_access: "Dict[str, Any]",
@@ -226,15 +246,17 @@ class RepoEntitlement(base.UAEntitlement):
             "Updating '%s' apt sources list on changed directives.", self.name
         )
 
-        if delta_apt_url:
+        if self._check_apt_url_delta_should_be_applied(delta_apt_url):
             orig_entitlement = orig_access.get("entitlement", {})
             old_url = orig_entitlement.get("directives", {}).get("aptURL")
             if old_url:
                 # Remove original aptURL and auth and rewrite
                 repo_filename = self.repo_list_file_tmpl.format(name=self.name)
                 apt.remove_auth_apt_repo(repo_filename, old_url)
-        self.remove_apt_config()
-        self.setup_apt_config()
+
+            self.remove_apt_config()
+            self.setup_apt_config()
+
         return True
 
     def setup_apt_config(self) -> None:
